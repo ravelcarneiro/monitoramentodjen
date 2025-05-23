@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Download, Calendar } from 'lucide-react';
+import { Search, Calendar } from 'lucide-react';
 import { djenService, Publication, SearchParams } from '../../services/djen';
 import toast from 'react-hot-toast';
 
@@ -11,13 +11,19 @@ const PublicationSearch: React.FC<PublicationSearchProps> = ({ onResultsFound })
   const [loading, setLoading] = useState(false);
   const [searchParams, setSearchParams] = useState<SearchParams>({
     query: '',
-    searchType: 'process',
+    searchType: 'name',
     startDate: undefined,
     endDate: undefined,
   });
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!searchParams.query.trim()) {
+      toast.error('Por favor, insira um termo para busca');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -25,40 +31,19 @@ const PublicationSearch: React.FC<PublicationSearchProps> = ({ onResultsFound })
       
       if (result.success && result.data) {
         onResultsFound(result.data);
-        toast.success('Publicações encontradas com sucesso!');
+        if (result.data.length > 0) {
+          toast.success(`${result.data.length} publicações encontradas!`);
+        } else {
+          toast.info('Nenhuma publicação encontrada para este termo.');
+        }
       } else {
         toast.error(result.error || 'Erro ao buscar publicações');
       }
     } catch (error) {
       toast.error('Erro ao realizar a busca');
+      console.error('Search error:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleExport = async (format: 'pdf' | 'csv', publications: Publication[]) => {
-    try {
-      if (format === 'pdf') {
-        const blob = await djenService.exportToPDF(publications);
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'publications.pdf';
-        link.click();
-        URL.revokeObjectURL(url);
-      } else {
-        const csv = await djenService.exportToCSV(publications);
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = 'publications.csv';
-        link.click();
-        URL.revokeObjectURL(url);
-      }
-      toast.success(`Exportação para ${format.toUpperCase()} concluída`);
-    } catch (error) {
-      toast.error(`Erro ao exportar para ${format.toUpperCase()}`);
     }
   };
 
@@ -76,8 +61,8 @@ const PublicationSearch: React.FC<PublicationSearchProps> = ({ onResultsFound })
               value={searchParams.searchType}
               onChange={(e) => setSearchParams(prev => ({ ...prev, searchType: e.target.value as SearchParams['searchType'] }))}
             >
-              <option value="process">Número do Processo</option>
               <option value="name">Nome</option>
+              <option value="process">Número do Processo</option>
               <option value="document">CPF/CNPJ</option>
             </select>
           </div>
@@ -91,9 +76,9 @@ const PublicationSearch: React.FC<PublicationSearchProps> = ({ onResultsFound })
               id="query"
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
               placeholder={
+                searchParams.searchType === 'name' ? 'Digite o nome completo' :
                 searchParams.searchType === 'process' ? '0000000-00.0000.0.00.0000' :
-                searchParams.searchType === 'name' ? 'Nome completo' :
-                'CPF ou CNPJ'
+                'Digite o CPF ou CNPJ'
               }
               value={searchParams.query}
               onChange={(e) => setSearchParams(prev => ({ ...prev, query: e.target.value }))}
@@ -137,11 +122,11 @@ const PublicationSearch: React.FC<PublicationSearchProps> = ({ onResultsFound })
           </div>
         </div>
 
-        <div className="flex justify-end space-x-2">
+        <div className="flex justify-end">
           <button
             type="submit"
             disabled={loading}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? (
               <>

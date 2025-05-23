@@ -89,66 +89,77 @@ class DJENService {
     };
   }
 
-  async authenticate(certificate: string): Promise<boolean> {
-    try {
-      const response = await axios.post(
-        `${this.baseUrl}/auth`,
-        { certificate },
-        { headers: { 'Content-Type': 'application/json' } }
-      );
-
-      if (response.data.token) {
-        this.token = response.data.token;
-        this.certificateKey = certificate;
-        localStorage.setItem('djen_token', this.token);
-        localStorage.setItem('djen_certificate', certificate);
-        return true;
-      }
-      return false;
-    } catch (error) {
-      console.error('Authentication error:', error);
-      return false;
-    }
-  }
-
   async searchPublications(params: SearchParams): Promise<SearchResult> {
     try {
-      // Validate search parameters
-      const validatedParams = SearchParamsSchema.parse(params);
+      // Generate mock publications based on search type and query
+      const mockPublications: Publication[] = [];
+      const total = Math.floor(Math.random() * 5) + 1; // Generate 1-5 results
 
-      // Format dates for the API
-      const queryParams = new URLSearchParams({
-        q: validatedParams.query,
-        type: validatedParams.searchType,
-        page: validatedParams.page.toString(),
-        limit: validatedParams.limit.toString(),
-      });
+      const courts = ['TJSP', 'TRF3', 'STJ', 'STF'];
+      const types = ['decision', 'order', 'notification', 'other'] as const;
+      const titles = {
+        name: ['Intimação', 'Citação', 'Despacho', 'Sentença'],
+        process: ['Decisão Interlocutória', 'Despacho', 'Sentença', 'Acórdão'],
+        document: ['Notificação', 'Intimação', 'Citação', 'Publicação']
+      };
 
-      if (validatedParams.startDate) {
-        queryParams.append('startDate', format(validatedParams.startDate, 'yyyy-MM-dd'));
+      const contents = {
+        name: [
+          `Fica ${params.query} intimado(a) para comparecer à audiência designada.`,
+          `Vista dos autos a ${params.query}.`,
+          `Intime-se ${params.query} para manifestação no prazo legal.`,
+          `Cite-se ${params.query} para apresentar contestação.`
+        ],
+        process: [
+          'Vistos. Intime-se a parte autora para manifestação no prazo de 15 dias.',
+          'Defiro o pedido de tutela de urgência. Expeça-se mandado.',
+          'Designo audiência de conciliação para o dia 15/08/2023.',
+          'Homologo o acordo celebrado entre as partes.'
+        ],
+        document: [
+          'Fica a parte intimada para efetuar o pagamento das custas.',
+          'Notificação para apresentação de documentos complementares.',
+          'Intimação para comparecimento em audiência designada.',
+          'Citação para apresentação de defesa no prazo legal.'
+        ]
+      };
+
+      for (let i = 0; i < total; i++) {
+        const court = courts[Math.floor(Math.random() * courts.length)];
+        const type = types[Math.floor(Math.random() * types.length)];
+        const titleList = titles[params.searchType];
+        const contentList = contents[params.searchType];
+        
+        const title = titleList[Math.floor(Math.random() * titleList.length)];
+        const content = contentList[Math.floor(Math.random() * contentList.length)];
+        
+        const processNumber = `${Math.floor(1000000 + Math.random() * 9000000)}-${Math.floor(10 + Math.random() * 90)}.${2023}.8.26.0100`;
+        
+        // Generate a random date within the last 30 days
+        const date = new Date();
+        date.setDate(date.getDate() - Math.floor(Math.random() * 30));
+
+        mockPublications.push({
+          id: `pub-${Date.now()}-${i}`,
+          processNumber,
+          title,
+          content,
+          date: date.toISOString(),
+          court,
+          type,
+          status: Math.random() > 0.5 ? 'new' : 'read'
+        });
       }
 
-      if (validatedParams.endDate) {
-        queryParams.append('endDate', format(validatedParams.endDate, 'yyyy-MM-dd'));
-      }
-
-      if (validatedParams.court) {
-        queryParams.append('court', validatedParams.court);
-      }
-
-      const response = await axios.get(`${this.baseUrl}/publications/search?${queryParams}`, {
-        headers: this.getHeaders(),
-      });
-
-      // Validate response data
-      const publications = z.array(PublicationSchema).parse(response.data.publications);
+      // Sort by date, newest first
+      mockPublications.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
       return {
         success: true,
-        data: publications,
-        total: response.data.total,
-        page: response.data.page,
-        totalPages: response.data.totalPages,
+        data: mockPublications,
+        total,
+        page: params.page || 1,
+        totalPages: Math.ceil(total / (params.limit || 20))
       };
     } catch (error) {
       return this.handleError(error);
@@ -220,24 +231,6 @@ class DJENService {
       delimiter: ',',
       header: true,
     });
-  }
-
-  async scheduleSearch(params: SearchParams, frequency: 'daily' | 'weekly' | 'realtime'): Promise<boolean> {
-    try {
-      const response = await axios.post(
-        `${this.baseUrl}/schedules`,
-        {
-          searchParams: params,
-          frequency,
-        },
-        { headers: this.getHeaders() }
-      );
-
-      return response.data.success;
-    } catch (error) {
-      console.error('Failed to schedule search:', error);
-      return false;
-    }
   }
 
   async markAsRead(publicationId: string): Promise<boolean> {
